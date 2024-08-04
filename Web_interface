@@ -1,0 +1,838 @@
+---
+title: "BacSPaD"
+subtitle: "by ALTRABIO"
+format: 
+  dashboard:
+    embed-resources: true
+    logo: logo.png
+    theme:
+      - materia
+      - custom.scss
+echo: false
+
+---
+
+
+```{r loadPackage}
+
+# install.packages("sf")
+require(sf)
+# install.packages("dplyr")
+require(dplyr)
+# install.packageslibrary(giscoR)
+require(giscoR)
+require(webshot)
+require(data.table)
+require(reactable)
+require(htmltools)
+require(crosstalk)
+require(ggplot2)
+require(highcharter)
+require(plotly)
+require(leaflet)
+require(maps)
+require(plotme)
+
+
+```
+
+```{r loadData}
+
+# xxx = fread('Genomes_labeled.csv')
+xxx = fread('Final_dbase4.csv', colClasses = c(genome_id="character"))
+virtab = fread('VFactors.txt')
+
+setnames(virtab, 'Num_Family', 'Num_Families')
+#xxx[is.na(xxx$species_name_NCBI),species_name_NCBI:='Not classified']
+#xxx[,species_name_NCBI:=NULL]
+
+#xxx[,fields_pasted:=gsub('NA','',fields_pasted)]
+
+xxx[,isolation_source := tolower(isolation_source)]
+
+xxx[,disease_comb :=paste(disease_category,disease_subcategory,sep = "-")]
+
+
+#xxx[,pathogenicity_label := factor(pathogenicity_label, levels = c('HP','NHP'), labels = c('HumanPathogenic', 'NonHumanPathogenic'))]
+
+disease_tab <- xxx[,.N, by = .(disease_category,disease_subcategory)]
+
+disease_tab <- data_to_hierarchical(disease_tab, c(disease_category,disease_subcategory), N )
+
+disease_burst = xxx[,.N,by = disease_comb] 
+
+ojs_define(xxx = xxx)
+
+ojs_define(disease_burst = disease_burst)
+
+
+
+```
+
+# Quick start guide
+
+
+Welcome to BacSPaD, your comprehensive resource for bacterial strains pathogenicity data. Here’s a brief overview to help you get started:
+
+**Data Section**
+
+Perform keyword queries across all fields or specific fields. For instance, if you want to focus your analysis on certain species, genus, families, order, class or phylum select  the corresponding metadata fields. You may also be eventually interested in selecting certain diseases using “disease category”, “disease subcategory”, and “isolation source” fields.
+
+Use BV-BRC genome IDs to retrieve corresponding genomes and data files (e.g., proteomes, protein families) from the BV-BRC FTP website (https://www.bv-brc.org/docs/quick_references/ftp.html) as there demonstrated:
+
+“Once you have copied the list of genome ids you are interested in a separate file “genome_list”, you can use the following one line shell script to read the list of genome ids from your file and download corresponding .fna files from the PATRIC FTP site. If you are interested in other file type, say .PATRIC.faa or .PATRIC.features.tab, simply replace .fna with that extension.
+
+
+<code>
+for i in \` cat genome_list \`; do wget -qN "ftp://ftp.bvbrc.org/genomes/\$i/\$i.fna";
+done
+</code>
+
+
+**Dashboard**
+
+Interactive Visualizations: Explore top species and families, taxa distribution, associated disease categories and isolation sources, and a location map of all strains.
+
+**Molecular Biology**
+
+Genome Data: Visualize distributions of the number of plasmids, contigs, genome lengths, GC content (%), and number of coding sequences for both HP and NHP genomes.
+
+**Virulence Factors**
+
+Access information on virulence factors for the most prevalent clinical species, including gene name, gene frequency in HP and NHP strains, the associated BV-BRC genome ids and species names; as well as the number of associated strains, species, genus, and families.
+
+
+**About**
+
+Learn about BacSPaD’s utility for microbiology research and find contact information.
+
+**Citation**
+
+If you use BacSPaD, please cite it as follows:
+
+Ribeiro, S., Chaumet, G., Alves, K., Nourikyan, J., Shi, L., Lavergne,J.-P., Mijakovic, I., de Bernard, S., & Buffat, L. (2024). BacSPaD: A robust bacterial strains’ pathogenicity resource based on integrated and curated genomic metadata. Preprints, 202407.0837.v1. 
+https://doi.org/10.20944/preprints202407.0837.v1
+
+
+For further assistance, contact us at sara.ribeiro@altrabio.com.
+
+
+# Data {scrolling="true"}
+
+## Row {height=90%, expandable="false" collapse="false"}
+
+
+```{r tableau}
+
+
+XXX <- SharedData$new(xxx)
+
+htmltools::browsable(
+  tagList(
+    tags$button("Download as CSV", onclick = "Reactable.downloadDataCSV('genomtab','Genomes_labeled.csv')", id = 'downloadbutton'),
+    reactable(XXX,
+      defaultSorted = list(isolation_country = "asc", species = "asc"),
+      searchable = TRUE,
+      highlight = TRUE,  
+      bordered = TRUE,
+      rowStyle = list(cursor = "pointer"),
+      defaultPageSize = 10,
+      striped = TRUE,
+      wrap = FALSE,
+      onClick = JS("function(rowInfo) {
+           var genomeid = document.getElementById('genomeid');
+          genomeid.textContent = rowInfo.values.genome_id;
+            var genomename = document.getElementById('genomename');
+          genomename.textContent = rowInfo.values.genome_name;
+            var genomename_bis = document.getElementById('genomename_bis');
+          genomename_bis.textContent = rowInfo.values.genome_name;
+            var taxonid = document.getElementById('taxon_id');
+          taxonid.textContent = rowInfo.values.taxon_id;
+            var phylum = document.getElementById('phylum');
+          phylum.textContent = rowInfo.values.phylum;
+            var order = document.getElementById('order');
+          order.textContent = rowInfo.values.order;
+            var genus = document.getElementById('genus');
+          genus.textContent = rowInfo.values.order;
+            var species = document.getElementById('species');
+          species.textContent = rowInfo.values.species;
+            var family = document.getElementById('family');
+          family.textContent = rowInfo.values.family;
+      }"),
+      defaultColDef = colDef(minWidth = 300, 
+        header = function(value) gsub("_", " ", value, fixed = TRUE),
+        cell = function(value) format(value, nsmall = 1),
+        sortNALast = TRUE,
+        align = "center",
+        headerStyle = list(background = "#f7f7f8")
+      ),
+      filterable = TRUE, 
+      columns = list(
+        pathogenicity_label = colDef(
+          na = "Not Classified",
+          filterInput = function(values, name) {
+            tags$select(
+              onchange = sprintf("Reactable.setFilter('genomtab', '%s', event.target.value || undefined)", name),
+              # "All" has an empty value to clear the filter, and is the default option
+              tags$option(value = "", "All"),
+              purrr::map(sort(unique(values)), tags$option),
+              "aria-label" = sprintf("Filter %s", name),
+              style = "width: 100%; height: 28px;"
+            )
+          }
+        ),
+        risk_group = colDef(
+          na = "Not Classified",
+          filterInput = function(values, name) {
+            tags$select(
+              onchange = sprintf("Reactable.setFilter('genomtab', '%s', event.target.value || undefined)", name),
+              # "All" has an empty value to clear the filter, and is the default option
+              tags$option(value = "", "All"),
+              purrr::map(sort(unique(values)), tags$option),
+              "aria-label" = sprintf("Filter %s", name),
+              style = "width: 100%; height: 28px;"
+            )
+          }
+        ),
+        species = colDef(
+          na = "Not classified",
+          filterInput = function(values, name) {
+            tags$select(
+              onchange = sprintf("Reactable.setFilter('genomtab', '%s', event.target.value || undefined)", name),
+              # "All" has an empty value to clear the filter, and is the default option
+              tags$option(value = "", "All"),
+              lapply(sort(unique(values)), tags$option),
+              "aria-label" = sprintf("Filter %s", name),
+              style = "width: 100%; height: 28px;"
+            )
+          }
+        ),
+        isolation_country = colDef(
+          filterInput = function(values, name) {
+            tags$select(
+              onchange = sprintf("Reactable.setFilter('genomtab', '%s', event.target.value || undefined)", name),
+              # "All" has an empty value to clear the filter, and is the default option
+              tags$option(value = "", "All"),
+              lapply(sort(unique(values)), tags$option),
+              "aria-label" = sprintf("Filter %s", name),
+              style = "width: 100%; height: 28px;"
+            )
+          }
+        ),
+        comments = colDef(show = FALSE)
+      ),
+      elementId = "genomtab")
+    )
+  )
+
+
+```
+
+
+## {.sidebar}
+
+
+<h3><div id='genomename'></div></h3>
+
+#### General Info
+
+* **Genome ID** <div id='genomeid'></div>
+
+* **Genome name** <div id='genomename_bis'></div>
+
+#### Taxonomy Info
+
+* **Taxon ID** <div id='taxon_id'></div>
+
+* **Phylum** <div id='phylum'></div>
+
+* **Order** <div id='order'></div>
+
+* **Family** <div id='family'></div>
+
+* **Genus** <div id='genus'></div>
+
+* **Species** <div id='species'></div>
+
+
+```{r downloadgenomeid}
+
+htmltools::browsable(
+  tagList(
+    tags$button("Download", onclick = JS("
+    function downloadAsDataURL (url) {
+      return new Promise((resolve, reject) => {
+         fetch(url)
+           .then(res => res.blob())
+           .then(blob => {
+              const reader = new FileReader()
+              reader.readAsDataURL(blob)
+              reader.onloadend = () => resolve(reader.result)
+              reader.onerror = err => reject(err)
+            })
+         .catch(err => reject(err))
+        })
+    }
+    const download = async (url, filename) => {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      link.href = window.URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+    }
+    let genid = function() {
+      var genomeid = document.getElementById('genomeid');
+      var id = genomeid.innerHTML;
+      // let selected = document.querySelectorAll('.rt-select-input:checked');
+      //if(selected.length==0) {
+      download('https://www.bv-brc.org/api/genome_sequence/?eq(genome_id,'+id+')','genome_sequence.json');
+      // } else {
+      // selected.foreach(
+      //     (element) => download('https://www.bv-brc.org/api/genome_sequence/?eq(genome_id,'+element+')','genome_sequence'+element+'.json');
+      //  )
+      // }
+     }
+      genid();
+      "))))
+
+```
+
+
+
+# Dashboard
+
+
+```{r datatrans}
+
+yyy = xxx[,.(count = .N), by = .(species,pathogenicity_label)]
+
+sortyyy = yyy[order(yyy$count, decreasing = TRUE),]
+
+varsel <- sortyyy[ , head(.SD,10)]$species
+sortyyy <- yyy[ species%in%varsel ]
+setorder(sortyyy, cols = 'pathogenicity_label')
+
+famipath <- xxx[,.(count = .N), by = .(family,pathogenicity_label)]
+speciespath <- xxx[,.(count = .N), by = .(species,pathogenicity_label)]
+speciespath<-speciespath[order(count, decreasing = TRUE)]
+speciesbar <- speciespath[species%in%unique(speciespath[,head(.SD,50)]$species)]
+
+famipath <- famipath[order(famipath$count, decreasing = TRUE)]
+famipath <- famipath[, head(.SD,10), by = family][1:20,] 
+fig1 <- plot_ly(yyy, x = ~species, y = ~count, type = 'bar', name = 'Species')
+xxxSel <- xxx[family%in%famipath$family]
+#fig1
+
+familyxxx = xxx[,.N, by = .(family,pathogenicity_label)]
+
+setorder(familyxxx, -N)
+
+selectfami <- head(familyxxx,13)$family
+
+familyxxx <- familyxxx[family%in%selectfami]
+
+zzz = xxx[,.(count = .N), by = pathogenicity_label]
+
+fig2 <- plot_ly(zzz, x = ~pathogenicity_label, y = ~count, type = 'bar', name = 'Pathogenicity')
+
+#fig2
+
+chrom = xxx[,.(count = .N), by = chromosomes]
+plasm = xxx[,.(count = .N), by = plasmids]
+conti = xxx[,.(count = .N), by = contigs]
+
+ojs_define(yyy = yyy)
+ojs_define(xxxSel = xxxSel)
+ojs_define(famipath = famipath)
+ojs_define(sortyyy = sortyyy)
+ojs_define(plasm = plasm)
+ojs_define(conti = conti)
+ojs_define(speciesbar = speciesbar)
+ojs_define(familyxxx = familyxxx)
+
+
+```
+
+## Row {height=50% expandable="false" collapse="false" scrolling="true"}
+
+
+::: {.panel-tabset}
+
+### Top 10 species 
+
+```{ojs topspecies}
+//| expandable: false
+
+Plot.plot({
+  marginLeft: 180,
+//  y: {
+//    tickRotate: ,
+//  },
+  x: {grid: true},
+  color: {legend: true,
+      domain: ['NHP', 'HP'],
+      range: ['#2F5A80', '#AD3426']
+  },
+  marks: [
+  Plot.barX(transpose(sortyyy), {x: "count", y: "species", fill: "pathogenicity_label",tip: true, sort: {y: "-x"}}),
+    Plot.ruleX([0])
+  ]
+})
+
+```
+
+### Top 50 species
+
+
+```{ojs observa1}
+//| expandable: false
+
+Plot.plot({
+  marginLeft: 180,
+//  y: {
+//    tickRotate: ,
+//  },
+  x: {grid: true},
+  color: {legend: true,
+      domain: ['NHP', 'HP'],
+      range: ['#2F5A80', '#AD3426']
+  },
+  marks: [
+  Plot.barX(transpose(speciesbar), {x: "count", y: "species", fill: "pathogenicity_label",tip: true, sort: {y: "-x"}}),
+    Plot.ruleX([0])
+  ]
+})
+
+
+
+```
+
+
+
+### Top 12 families
+
+```{ojs topfamilies}
+//| expandable: false
+
+Plot.plot({
+  marginLeft: 160,
+  fy: {padding: 0, label: null, tickRotate: 90, tickSize: 6},
+  x: {grid: true},
+  color: {legend: true,
+      domain: ['NHP', 'HP'],
+      range: ['#2F5A80', '#AD3426']
+  },
+  marks: [
+  Plot.barX(transpose(familyxxx), {x: "N", y: "family", fill: "pathogenicity_label", sort: {y: "-x"}, tip: true}),
+    Plot.ruleX([0])
+  ]
+})
+
+
+```
+
+
+```{r barplot_family, eval = FALSE}
+
+
+setorder(familyxxx,"pathogenicity_label")
+
+barplotfamily = ggplot(data=familyxxx, aes(x = N, y = family, fill= pathogenicity_label)) + 
+  geom_bar(stat = "identity",position = position_stack(reverse = TRUE))
+
+
+ggsave("barplot.pdf", plot = barplotfamily)
+
+
+```
+
+
+
+
+
+:::
+
+### Taxonomy 
+
+
+```{r Taxonomy}
+#| title: "Taxonomy"
+
+suntaxo <- xxx %>% count(phylum, class, order, family, genus) 
+
+suntaxobase = plotme:::create_all_col_params(suntaxo, fill_by_n = FALSE, sort_by_n = TRUE)
+
+suntaxoiso <- plot_ly(
+    ids = suntaxobase$ids,
+    labels = suntaxobase$labels,
+    parents = suntaxobase$parents,
+    values = suntaxobase$values,
+    type = 'sunburst',
+    branchvalues = "total",
+    hoverinfo = "text",
+    sort = suntaxobase$sort 
+)
+
+suntaxoiso$x$layout$margin$b = 0
+suntaxoiso$x$layout$margin$t = 0
+suntaxoiso$x$layout$margin$r = 0
+suntaxoiso$x$layout$margin$l = 0
+
+suntaxoiso
+
+#kaleido(suntaxoiso,"taxonomy.pdf")
+
+```
+
+
+## Row {height=50%}
+
+::: {.panel-tabset collapse="false"}
+
+
+### Disease category 
+
+```{r disease}
+#| label: "Disease category"
+#| expandable: false
+
+
+# xxx[,host_gender:=tolower(host_gender)]
+
+# fig <- hchart(xxx$host_gender, type = 'pie') |> 
+#  hc_title(text = "Distribution of gender host")
+
+# fig
+
+disly <- xxx[disease_category!=''] %>% count(disease_category,disease_subcategory) %>% count_to_sunburst()
+disdataly <- xxx[pathogenicity_label!='NHP']%>% count(disease_category,disease_subcategory) 
+
+machin = plotme:::create_all_col_params(disdataly, fill_by_n = FALSE, sort_by_n = FALSE)
+
+#plot_ly(machin, ids = ~ids, labels = ~labels, parents = ~parents, values = ~values, type = "sunburst", branchvalues = "total")
+
+disly$sizingPolicy$defaultHeight = 600
+disly$sizingPolicy$defaultWidth = "125%"
+disly$sizingPolicy$viewer$defaultHeight = 600
+
+#disly
+
+sunbdis <- plot_ly(
+    ids = machin$ids,
+    labels = machin$labels,
+    parents = machin$parents,
+    values = machin$values,
+    type = 'sunburst',
+    branchvalues = "total",
+    hoverinfo = "text",
+    sort = machin$sort 
+)
+
+sunbdis$x$layout$margin$b = 0
+sunbdis$x$layout$margin$t = 0
+sunbdis$x$layout$margin$r = 0
+sunbdis$x$layout$margin$l = 0
+
+
+sunbdis
+
+#fig <- plot_ly(disease_sun, ids = ~V3, labels = ~V3, parents = ~V2, type = 'sunburst')
+#sunburst(disease_burst, withD3 = TRUE)
+#hchart(disease_tab, type = "sunburst")
+
+```
+
+
+### Isolation source
+
+
+```{r isolation}
+#| expandable: false
+
+#isola_data = xxx[,.N,by = isolation_source_category]
+#ddd = data_to_hierarchical(isola_data, isolation_source_category, N)
+#sunburst(tree, width = "100%")
+sunbiso = xxx %>% count(isolation_source_category) 
+
+sunpariso = plotme:::create_all_col_params(sunbiso, fill_by_n = FALSE, sort_by_n = FALSE)
+
+sunbiso <- plot_ly(
+    ids = sunpariso$ids,
+    labels = sunpariso$labels,
+    parents = sunpariso$parents,
+    values = sunpariso$values,
+    type = 'sunburst',
+    branchvalues = "total",
+    hoverinfo = "text",
+    sort = sunpariso$sort 
+)
+
+sunbiso$x$layout$margin$b = 0
+sunbiso$x$layout$margin$t = 0
+sunbiso$x$layout$margin$r = 0
+sunbiso$x$layout$margin$l = 0
+
+sunbiso
+
+
+```
+
+
+:::
+
+
+### Proportion of pathogenicity among strains 
+
+
+```{r observa3}
+
+coloors <- c('#AD3426','#2F5A80')
+
+fig <- hchart(xxx$pathogenicity_label,labels = xxx$pathogenicity_label, type = 'pie') |> 
+  hc_title(text = "Distribution of Bacterial Strains: HP vs NHP") |> 
+    hc_colors(coloors) |> 
+    hc_tooltip(useHTML = TRUE,
+       headerFormat = "<table>",
+     pointFormat = paste("<tr><th colspan=\"1\"><b>Number of strains:</b></th> <td>{point.y}</td></tr>",
+                           "<tr><th><b>Proportion</b>:</th><td>{point.percentage:.1f}%  </td></tr>")) 
+
+fig
+
+```
+
+
+### Isolation country map
+
+
+```{r map, eval = TRUE}
+
+#tooltip = list(valueDecimals = 0, valueSuffix = " strain(s)"),
+
+ByCountry = xxx[,.N,by="isolation_country"]
+ByCountry[,iso:=passport::parse_country(ByCountry$isolation_country, to = "iso3c")]
+hcmap(map = "custom/world-highres", data = ByCountry, 
+             joinBy = c('iso-a3','iso'), value = "N",
+             name = "Strain numbers",
+            dataLabels = list(enabled = TRUE, format = "{point.isolation_country}")) |>
+     hc_title(text = "Strain number by isolation country") |>  
+     hc_tooltip(useHTML = TRUE,
+       headerFormat = "<table>",
+       pointFormat = paste("<tr><th colspan=\"1\"><b>{point.isolation_country}</b></th></tr>",
+                           "<tr><th><b>Strains number</b>:</th><td>{point.value} </td></tr>")) |>
+     hc_plotOptions(
+       series = list(
+         cursor = "pointer",
+         point = list(
+          events = list(
+                        click = JS( "function () { location.href = 'https://bacspad.altrabio.com/#data/' + this.options.isolation_country;  }" )
+          )
+         )
+       )
+     ) |>
+hc_colorAxis(type = 'logarithmic', maxColor = '#FF0000', minColor = '#0000FF') |>
+  hc_mapNavigation(enabled = TRUE)
+
+# world_sf <- read_sf("~/webrspi/GenoQuarto/World/World_Countries.shp")
+#world_merged <- left_join(world_sf, ByCountry, by = join_by(COUNTRY==isolation_country))
+#world_merged = merge(world_sf,ByCountry,by.x = 'COUNTRY' , by.y = 'isolation_country')
+
+
+#mybins <- c(0, 10, 100, 1000, Inf)
+
+#mypalette <- colorBin(
+#   palette = "YlOrBr", domain = world_merged$N,  na.color = "transparent", bins = mybins
+#)
+
+#mypalette(c(45, 43))
+
+
+#m  <- leaflet(world_merged) %>% addTiles() %>% 
+#   setView(lat = 10, lng = 0, zoom = 2) %>%
+#     addPolygons(
+#        stroke = TRUE, fillOpacity = 0.9, color = "white",
+#          fillColor = ~ mypalette(N)
+#      ) %>%
+#    addLegend(
+#        pal = mypalette, values = ~N, opacity = 0.9, title = "Number of strain", position = "bottomleft"
+#    )
+
+
+```
+
+
+
+
+
+
+# Molecular biology
+
+## Rows {height=50%}
+
+::: {.panel-tabset}
+
+
+### Plasmids
+
+
+```{ojs observa5}
+//| label: plasmids
+//| expandable: false
+
+Plot.plot({
+  y: {label: 'Number of genomes (n)', grid: true},
+  marks: [
+  Plot.barY(transpose(plasm), {x: "plasmids", y: "count", tip: true, fill: "#CCAD3F"}),
+  Plot.ruleY([0])
+  ]
+})
+
+```
+
+### Contigs
+
+```{ojs observa6}
+//| label: contigs
+//| expandable: false
+
+Plot.plot({
+  y: {label: 'Number of genomes (n)', grid: true},
+  marks: [
+  Plot.barY(transpose(conti), {x: "contigs", y: "count", tip: true, fill: "#CCAD3F"}),
+  Plot.ruleY([0])
+  ]
+})
+
+```
+
+::: 
+
+## Rows {height=50%}
+
+::: {.panel-tabset}
+
+### Genome length
+
+```{ojs genomelength}
+//| label: genomelength
+//| expandable: false
+
+Plot.plot({
+y: {label: 'Number of genomes',grid: true},
+x: {label: 'Genome length (bp)'},
+  color: {legend: true,
+      domain: ['NHP', 'HP'],
+      range: ['#2F5A80', '#AD3426']
+  },
+  marks: [
+  Plot.rectY(transpose(xxx), Plot.binX({y: "count"}, {x: "genome_length", fill: "pathogenicity_label", tip: true, 
+  })),
+    Plot.ruleY([0])
+  ]
+          
+})
+
+```
+
+### GC content
+
+```{ojs gc content}
+//| label: gc_content
+//| expandable: false
+
+Plot.plot({
+y: {label: "Number of genomes",grid: true},
+x: {label: "GC content (%)"},
+  color: {legend: true,
+      domain: ['NHP', 'HP'],
+      range: ['#2F5A80', '#AD3426']
+  },
+  marks: [
+  Plot.rectY(transpose(xxx), Plot.binX({y: "count"}, {x: "gc_content", fill: "pathogenicity_label", tip: true})),
+    Plot.ruleY([0])
+  ]
+          
+})
+
+```
+
+### Patric cds
+
+
+```{ojs patric_cds}
+//| label: patric_cds
+//| expandable: false
+
+Plot.plot({
+  y: {label: "Number of genomes",grid: true},
+  x: {label: "Patric cds (Number)"},
+  color: {legend: true,
+      domain: ['NHP', 'HP'],
+      range: ['#2F5A80', '#AD3426']
+  },
+  marks: [
+  Plot.rectY(transpose(xxx), Plot.binX({y: "count"}, {x: "patric_cds", fill: "pathogenicity_label", tip: true})),
+    Plot.ruleY([0])
+  ]
+          
+})
+
+```
+
+
+:::
+
+# Virulence Factors
+
+```{r virulence}
+
+htmltools::browsable(
+  tagList(
+    tags$button("Download as CSV", onclick = "Reactable.downloadDataCSV('virutab','VirulenceTab.csv')", id = 'downloadbutton'),
+
+      reactable(data = virtab, 
+        defaultPageSize = 25,
+        searchable = TRUE,
+        highlight = TRUE,  
+        bordered = TRUE,
+        striped = TRUE,
+        wrap = FALSE,
+      filterable = TRUE, 
+        defaultColDef = colDef(minWidth = 300, 
+          header = function(value) gsub("_", " ", value, fixed = TRUE),
+          cell = function(value) format(value, nsmall = 1),
+          sortNALast = TRUE,
+          align = "center",
+          headerStyle = list(background = "#f7f7f8")
+          ),
+        elementId = "virutab")
+    )
+)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+# About
+
+## About BacSPaD
+
+
+BacSPaD (Bacterial Strains Pathogenicity Dataset) is a pioneering resource developed to address the critical gap in accessible and reliable data on bacterial pathogenicity at the strain level. This manually curated dataset integrates comprehensive genomic metadata to provide researchers with annotations on the pathogenic potential of bacterial strains. We leveraged metadata from esteemed sources and enhanced it with meticulous manual reviews of relevant scientific literature. Our dataset features pathogenicity annotations for 5,992 high-quality and complete genomes, identifying strains as either pathogenic (HP) or non-pathogenic (NHP) to humans. This open-access resource serves as an invaluable tool for researchers engaged in studying bacterial pathogenesis and developing computational tools for pathogenicity prediction. By providing a clear, searchable interface, BacSPaD enables users to download the data and query metadata fields in the section ‘Data’, and ‘Virulence Factors’ and visualize associated statistics in the section ‘Dashboard’ and ‘Molecular Biology’. Whether for academic research, public health surveillance, or the development of novel therapeutic strategies, BacSPaD offers a structured and reliable foundation for enhancing our understanding of bacterial interactions and their implications on human health. This work is part of the PEST-BIN European consortium (https://www.sysbio.se/pest-bin_eu/), which aims to enhance understanding of bacterial pathogenicity. 
+
+Contacts:
+
+* sara.ribeiro@altrabio.com
+
+* guillaume.chaumet@altrabio.com
+
+* contactus@altrabio.com
+

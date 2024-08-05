@@ -7,7 +7,7 @@ library(stringr)
 patric_genome_metadata <- read.delim("genome_metadata", dec = ".", colClasses = c("character", rep(NA, 65)))
 rownames(patric_genome_metadata) <- patric_genome_metadata$genome_id
 
-# Load BVBRC genome data with specific filters as detailed in publication
+# Load BVBRC genome data with specific filters as detailed in associated publication
 BVBRC_genome_nohf_compl <- read.delim("BVBRC_genome_COMPL_NOHF.txt", dec = ".", colClasses = c("character", rep(NA, 86)))
 rownames(BVBRC_genome_nohf_compl) <- BVBRC_genome_nohf_compl$Genome.ID
 

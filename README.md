@@ -12,10 +12,10 @@ Use BV-BRC genome IDs to retrieve corresponding genomes and data files (e.g., pr
 “Once you have copied the list of genome ids you are interested in a separate file “genome_list”, you can use the following one line shell script to read the list of genome ids from your file and download corresponding .fna files from the PATRIC FTP site. If you are interested in other file type, say .PATRIC.faa or .PATRIC.features.tab, simply replace .fna with that extension.
 
 
-<code>
-for i in \` cat genome_list \`; do wget -qN "ftp://ftp.bvbrc.org/genomes/\$i/\$i.fna";
+<code>for i in \` cat genome_list \`; do wget -qN "ftp://ftp.bvbrc.org/genomes/\$i/\$i.fna";
 done
 </code>
+
 
 **Dashboard**
 

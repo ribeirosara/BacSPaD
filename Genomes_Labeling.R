@@ -3,14 +3,11 @@ library(dplyr)
 library(readr)
 library(stringr)
 
-# Source external R script
-source("Genomes_filtering.R")
-
 # ------------------------------------------------------------------------------
 # Match NCBI information with local metadata
 # ------------------------------------------------------------------------------
 
-# Clean biosample accession data by removing repetition identifiers
+# Clean biosample accession data by removing repetition identifiers - merged_df_sel as the integrated dataset from databases
 biosample_accession <- gsub(pattern = "\\..*", replacement = "", rownames(merged_df_sel))
 merged_df_sel$biosample_accession <- biosample_accession
 
